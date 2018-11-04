@@ -1,6 +1,8 @@
 import argparse
 import csv
+import datetime
 import io
+from operator import itemgetter
 
 
 def convert(file_name):
@@ -9,7 +11,6 @@ def convert(file_name):
     with open(file_name, 'r') as rfp:
         reader = csv.reader(rfp)
 
-        use_miles = False
         in_log = False
         log = []
 
@@ -19,31 +20,51 @@ def convert(file_name):
                 continue
             # header
             if line[0] == 'Data':
-                if line[1] == 'Odo (mi)':
-                    use_miles = True
                 continue
             if in_log and line[0].startswith('##'):
                 break
             if in_log:
+                line[1] = int(line[1])
                 log.append(line)
 
-    writer = csv.writer(output)
+    log = sorted(log, key=itemgetter(1))  # sort by ODO
+
+    writer = csv.writer(output, delimiter=';')
     writer.writerow((
-        'fuelup_date',
-        'odometer',
-        'litres',
-        'partial_fuelup',
-        'price',
+        'Date',
+        'Odometer',
+        'Trip',
+        'Quantity',
+        'Type',
+        'Total price',
+        'Currency',
     ))
 
+    previous_odo = None
+
     for item in log:
+        date = datetime.datetime.strptime(item[0], '%Y-%m-%d').date()
+        odo = int(item[1])
+        distance = odo - previous_odo if previous_odo else 0
+
+        if not distance:
+            type_ = '3'  # first
+        elif item[3] == '1':
+            type_ = '1'  # full
+        else:
+            type_ = '2'  # partial
+
         writer.writerow((
-            item[0],  # date
+            date.strftime('%d.%m.%Y'),  # date
             item[1],  # ODO
-            item[2],  # litres
-            0 if item[3] == '1' else 1,  # full
-            item[13],  # price/l
+            distance,
+            item[2],  # quantity
+            type_,  # fueling type
+            item[4],  # total price
+            'CZK',
         ))
+
+        previous_odo = odo
 
     print(output.getvalue().strip())
 
